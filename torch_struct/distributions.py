@@ -13,6 +13,7 @@ from .semirings import (
     EntropySemiring,
     MultiSampledSemiring,
     KMaxSemiring,
+    StdSemiring,
 )
 
 
@@ -96,9 +97,20 @@ class StructDistribution(Distribution):
         """
         return self._struct(MaxSemiring).marginals(self.log_potentials, self.lengths)
 
-    def topk(self, k):
+    def kmax(self, k):
         r"""
         Compute the k-max for distribution :math:`k\max p(z)`.
+        Returns:
+            kmax (*k x batch_shape*)
+        """
+        with torch.enable_grad():
+            return self._struct(KMaxSemiring(k)).sum(
+                self.log_potentials, self.lengths, _raw=True
+            )
+
+    def topk(self, k):
+        r"""
+        Compute the k-argmax for distribution :math:`k\max p(z)`.
 
         Returns:
             kmax (*k x batch_shape x event_shape*)
@@ -126,6 +138,13 @@ class StructDistribution(Distribution):
         """
         return self._struct(LogSemiring).marginals(self.log_potentials, self.lengths)
 
+    @lazy_property
+    def count(self):
+        "Compute the log-partition function."
+        return self._struct(StdSemiring).sum(
+            torch.ones_like(self.log_potentials), self.lengths
+        )
+
     # @constraints.dependent_property
     # def support(self):
     #     pass
@@ -136,7 +155,7 @@ class StructDistribution(Distribution):
 
     @lazy_property
     def partition(self):
-        "Compute the partition function."
+        "Compute the log-partition function."
         return self._struct(LogSemiring).sum(self.log_potentials, self.lengths)
 
     def sample(self, sample_shape=torch.Size()):
